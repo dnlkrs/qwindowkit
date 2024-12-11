@@ -1159,13 +1159,13 @@ namespace QWK {
                 // are sent by ourselves.
                 return kMessageTag.wParam;
             }
+            if(myMsg == WM_NCPOINTERDOWN || myMsg == WM_NCPOINTERUP) {
+                return myMsg == WM_NCPOINTERDOWN ? MK_LBUTTON : 0;
+            }
             const quint64 keyState = getKeyState();
             if ((myMsg >= WM_NCXBUTTONDOWN) && (myMsg <= WM_NCXBUTTONDBLCLK)) {
                 const auto xButtonMask = GET_XBUTTON_WPARAM(wParam);
                 return MAKEWPARAM(keyState, xButtonMask);
-            }
-            if(myMsg == WM_NCPOINTERDOWN || myMsg == WM_NCPOINTERUP) {
-                return MK_LBUTTON;
             }
             return keyState;
         }();
@@ -1391,6 +1391,22 @@ namespace QWK {
                         *result = ::DefWindowProcW(hWnd, WM_NCMOUSEMOVE, wParam, lParam);
                         emulateClientAreaMessage(hWnd, message, wParam, lParam);
                         return true;
+                    }
+
+                    if (message >= WM_NCPOINTERUPDATE && message <= WM_NCPOINTERUP) {
+
+                        const auto pId = GET_POINTERID_WPARAM(wParam);
+
+                        POINTER_INFO pInfo;
+                        ::GetPointerInfo(pId, &pInfo);
+
+                        if (pInfo.pointerFlags & (POINTER_FLAG_PRIMARY | POINTER_FLAG_CONFIDENCE)) {
+                            *result = FALSE;
+                            emulateClientAreaMessage(hWnd, message, wParam, lParam);
+                            return true;
+                        } else {
+                            return false;
+                        }
                     }
 
                     if (lastHitTestResultRaw == HTSYSMENU) {
