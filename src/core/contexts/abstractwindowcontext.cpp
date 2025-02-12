@@ -230,35 +230,41 @@ namespace QWK {
         if (m_windowHandle) {
             removeEventFilter(m_windowHandle);
         }
+
+        auto oldWindowHandle = m_windowHandle.data();
         m_windowHandle = m_delegate->hostWindow(m_host);
 
         if (oldWinId != m_windowId) {
             winIdChanged(m_windowId, oldWinId);
-        }
 
-        if (m_windowHandle) {
-            m_windowHandle->installEventFilter(this);
+            if (m_windowId) {
+                // Installing twice has no side-effect.
+                m_windowHandle->installEventFilter(this);
 
-            // Refresh window attributes
-            auto attributes = m_windowAttributes;
-            m_windowAttributes.clear();
-            for (auto it = attributes.begin(); it != attributes.end(); ++it) {
-                if (!windowAttributeChanged(it.key(), it.value(), {})) {
-                    continue;
+                // Refresh window attributes
+                for (auto it = m_windowAttributesOrder.begin();
+                     it != m_windowAttributesOrder.end();) {
+                    if (!windowAttributeChanged(it->first, it->second, {})) {
+                        m_windowAttributes.remove(it->first);
+                        it = m_windowAttributesOrder.erase(it);
+                        continue;
+                    }
+                    ++it;
                 }
-                m_windowAttributes.insert(it.key(), it.value());
             }
-        }
 
-        // Send to shared dispatchers
-        if (oldWinId != m_windowId) {
+            // Send to shared dispatchers
             QEvent e(QEvent::WinIdChange);
             sharedDispatch(m_host, &e);
         }
     }
 
     QVariant AbstractWindowContext::windowAttribute(const QString &key) const {
-        return m_windowAttributes.value(key);
+        auto it = m_windowAttributes.find(key);
+        if (it == m_windowAttributes.end()) {
+            return {};
+        }
+        return it.value()->second;
     }
 
     bool AbstractWindowContext::setWindowAttribute(const QString &key, const QVariant &attribute) {
@@ -267,22 +273,27 @@ namespace QWK {
             if (!attribute.isValid()) {
                 return true;
             }
-            if (!m_windowHandle || !windowAttributeChanged(key, attribute, {})) {
+            if (m_windowId && !windowAttributeChanged(key, attribute, {})) {
                 return false;
             }
-            m_windowAttributes.insert(key, attribute);
+            m_windowAttributes.insert(
+                key, m_windowAttributesOrder.insert(m_windowAttributesOrder.end(),
+                                                    std::make_pair(key, attribute)));
             return true;
         }
 
-        if (it.value() == attribute)
-            return true;
-        if (!m_windowHandle || !windowAttributeChanged(key, attribute, it.value())) {
+        auto &listIter = it.value();
+        auto &oldAttr = listIter->second;
+        if (m_windowId && !windowAttributeChanged(key, attribute, oldAttr)) {
             return false;
         }
 
         if (attribute.isValid()) {
-            it.value() = attribute;
+            oldAttr = attribute;
+            m_windowAttributesOrder.splice(m_windowAttributesOrder.end(), m_windowAttributesOrder,
+                                           listIter);
         } else {
+            m_windowAttributesOrder.erase(listIter);
             m_windowAttributes.erase(it);
         }
         return true;
