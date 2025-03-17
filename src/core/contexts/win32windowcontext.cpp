@@ -37,6 +37,14 @@
 #  error Current Qt version has a critical bug which will break QWK functionality. Please upgrade to > 6.6.1 or downgrade to < 6.6.0
 #endif
 
+#ifndef DWM_BB_ENABLE
+#  define DWM_BB_ENABLE 0x00000001
+#endif
+
+#ifndef ABM_GETAUTOHIDEBAREX
+#  define ABM_GETAUTOHIDEBAREX 0x0000000b
+#endif
+
 namespace QWK {
 
     enum IconButtonClickLevelFlag {
@@ -920,13 +928,8 @@ namespace QWK {
 
         const DynamicApis &apis = DynamicApis::instance();
         const auto &extendMargins = [this, &apis, hwnd]() {
-            // For some unknown reason, the window background is totally black when the host object
-            // is a QWidget. And extending the window frame into the client area seems to fix it
-            // magically.
-            // We don't need the following *HACK* for QtQuick windows.
-            if (!m_host->isWidgetType()) {
-                return;
-            }
+            // For some unknown reason, the window background is totally black and extending
+            // the window frame into the client area seems to fix it magically.
             // After many times of trying, we found that the Acrylic/Mica/Mica Alt background
             // only appears on the native Win32 window's background, so naturally we want to
             // extend the window frame into the whole client area to be able to let the special
@@ -955,6 +958,7 @@ namespace QWK {
 
         const auto &effectBugWorkaround = [this, hwnd]() {
             // We don't need the following *HACK* for QWidget windows.
+            // Completely based on actual experiments, root reason is totally unknown.
             if (m_host->isWidgetType()) {
                 return;
             }
@@ -2347,7 +2351,7 @@ namespace QWK {
                 if (!mouseHook) {
                     mouseHook = ::SetWindowsHookExW(
                         WH_MOUSE,
-                        [](int nCode, WPARAM wParam, LPARAM lParam) {
+                        [](int nCode, WPARAM wParam, LPARAM lParam) -> LRESULT WINAPI {
                             if (nCode >= 0) {
                                 switch (wParam) {
                                     case WM_LBUTTONDBLCLK:
