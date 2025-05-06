@@ -97,7 +97,14 @@ namespace QWK {
     BorderItem::~BorderItem() = default;
 
     void BorderItem::updateGeometry() {
-        setHeight(borderThickness() / window()->devicePixelRatio());
+
+        const auto w = window();
+        if (!w) return;
+
+        const auto dpr = w->devicePixelRatio();
+        if (dpr == 0) return;
+
+        setHeight(borderThickness() / dpr);
         setVisible(isNormalWindow());
     }
 
